@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 al = 2
 
 be = 1
-
+#whatthefuck
 ga = 1
 
 n_ = 40
