@@ -28,17 +28,20 @@ def q(x):
 def u(x, alpha, betta):
     return np.power(x, alpha) * np.power(-1 * x + 1, betta)
 
+def p_(x, gamma):
+	return (np.power(x,gamma-1))
 
 def func(x):
+#Посчитал на бумажке, если не переделал -- простите.
     return x ** 6 - 3 * x ** 5 - 23 * x ** 4 + 46 * x ** 3 - 9 * x ** 2 - 19 * x + 7
 
 
-def Jacobi(A: np.ndarray, b: np.ndarray, epsilon: float, x=None):
+def Jacobi(A: np.ndarray, b: np.ndarray, x=None):
     n = len(A)
     if x is None:
         x = np.zeros(n)
     x_ = np.zeros(n)
-
+    epsilon = (1/n)**3
     norm = float('inf')
     iters = 0
     while norm > epsilon:
@@ -72,8 +75,49 @@ def Seidel(A: np.ndarray, b: np.ndarray, epsilon, x=None):
         it += 1
     return x, it
 
+def BrakeUltimatum(x_, n):
+    r_vector = np.zeros(n)
+    for i in range(n):
+        r_vector[i] = x_[i] - func(1 / n)*i
+    if(np.max(r_vector) > (1/n)**3):
+        return True
+    else: return False
 
-def optimal_w(A: np.ndarray, b: np.ndarray, epsilon, x=None,  parts=20, left: float = 1, right: float = 2):
+def GradientDescent(A:np, b:np.ndarray, x=None):
+    n = len(A)
+    r = np.zeros(n, dtype = float)
+    t:float = 0.0
+    if x is None:
+        y = np.zeros(n, dtype = float)
+    else: y = np.copy(x)
+    iter:int = 0
+    norm = float('inf')
+    while (norm > (1/n)**3):
+        r[0] = A[0,0]*y[0]
+        r[n-1] = A[n-1,n-1]*y[n-1]
+        for i in range(1,n-1):
+            if(i-1>0):
+                ai = A[i,i - 1]
+            else:
+                ai = 0
+            ci = A[i,i]
+            if(i+1<n):
+                bi = A[i,i + 1]
+            else:
+                bi = 0
+            r[i] = -ai * y[i - 1] + ci * y[i] - bi * y[i + 1] - func(i) * (1/n) * (1/n)
+        t = r**2 / ((A * r) * r)
+        y = y - t*r
+        iter = iter+1
+        norm = np.max(np.max(np.abs(r)))
+    return y, iter
+
+
+
+
+
+def optimal_w(A: np.ndarray, b: np.ndarray, x=None,  parts=20, left: float = 1, right: float = 2):
+    eps = (1/(len(A)))**3
     if right - left > 0.01:
         if x is None:
             x = np.zeros(shape=(len(A),))
@@ -82,7 +126,7 @@ def optimal_w(A: np.ndarray, b: np.ndarray, epsilon, x=None,  parts=20, left: fl
         min_w = [left]
         w = left
         while w <= right:
-            iters = Relaxation(A=A, b=b, x=x, w=w, epsilon=epsilon)[1]
+            iters = Relaxation(A=A, b=b, x=x, w=w)[1]
             if iters < min_iters:
                 min_w = [w]
                 min_iters = iters
@@ -93,8 +137,9 @@ def optimal_w(A: np.ndarray, b: np.ndarray, epsilon, x=None,  parts=20, left: fl
     return [left + (right - left) / 2]
 
 
-def Relaxation(A: np.ndarray, b: np.ndarray, epsilon, x=None, w=1.8):
+def Relaxation(A: np.ndarray, b: np.ndarray, x=None, w=1.8):
     n = len(A)
+    eps = (1/n)**3
     if x is None:
         x = np.zeros(n)
     it = 0
@@ -102,7 +147,7 @@ def Relaxation(A: np.ndarray, b: np.ndarray, epsilon, x=None, w=1.8):
     x_ = np.copy(x)
 
     norm = float('inf')
-    while norm > epsilon:
+    while norm > eps:
         for i in range(n):
             s1 = sum(A[i][j] * x_[j] for j in range(i))
             s2 = sum(A[i][j] * x[j] for j in range(i + 1, n))
@@ -189,7 +234,7 @@ def explore_n_by_y(alpha, betta, gamma, n):
     A = generate_A(n, gamma=gamma)
     f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n)])
 
-    eps = 1e-5
+    eps = (1/n)**3
     print("n={}, eps={}, h={}, h^2={}".format(n, eps, h, h ** 2))
 
     print('метод Якоби')
@@ -208,7 +253,7 @@ def explore_n_by_y(alpha, betta, gamma, n):
         res = Seidel(A, f, x=y, epsilon=eps)
         print('y: ', y[0],
               'итераций={}, максимальная ошибка={}'.format(res[1], np.max(
-                  np.abs(res[0] - u(x, alpha, beta)[:-1]))))
+                  np.abs(res[0] - u(x, alpha, betta)[:-1]))))
 
     print('метод Верхней релаксации')
     for i in range(len(ys)):
@@ -218,22 +263,23 @@ def explore_n_by_y(alpha, betta, gamma, n):
         res = Relaxation(A, f, x=y, w=w, epsilon=eps)
         print('y: ', y[0],
               'итераций={}, максимальная ошибка={}'.format(res[1], np.max(
-                  np.abs(res[0] - u(x, alpha, beta)[:-1]))))
+                  np.abs(res[0] - u(x, alpha, betta)[:-1]))))
 
 
 #explore_n_by_y()
 
 
-def compare_methods(alpha, betta, gamma, eps):
+def compare_methods(alpha, betta, gamma):
     print('Сравнение трех методов')
     ns = [10 + i * 15 for i in range(5)]
 
-    print("eps={}".format(eps))
+    #rint("eps={}".format(eps))
 
     print('метод Якоби')
     j_iters = []
     for n in ns:
         h = 1 / n
+        eps = (1/n)**3
         A = generate_A(n, gamma=gamma)
         f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n)])
         x = np.array(create_list(0, 1, n))
@@ -250,6 +296,7 @@ def compare_methods(alpha, betta, gamma, eps):
     z_iters = []
     for n in ns:
         h = 1 / n
+        eps = (1/n)**3
         A = generate_A(n, gamma=gamma)
         f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n)])
         x = np.array(create_list(0, 1, n))
@@ -266,18 +313,36 @@ def compare_methods(alpha, betta, gamma, eps):
     r_iters = []
     for n in ns:
         h = 1 / n
+        eps = (1/n)**3
         A = generate_A(n, gamma=gamma)
         f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n)])
         x = np.array(create_list(0, 1, n))
 
         print("n={}, h={}, h^2={}".format(n, h, h ** 2))
 
-        w = optimal_w(A, f, epsilon=eps)[0][-1]
-        res = Relaxation(A, f, epsilon=eps, w=w)
+        w = optimal_w(A, f)[0][-1]
+        res = Relaxation(A, f, w=w)
         r_iters.append(res[1])
         print('итераций={}, максимальная ошибка={}'.format(res[1], np.max(
             np.abs(res[0] - u(x, alpha, betta)[:-1]))))
     plt.plot(ns, r_iters, label='метод врехней релаксации')
+
+    print('метод Градиентного спуска')
+    g_iters = []
+    for n in ns:
+        h = 1 / n
+        eps = (1 / n) ** 3
+        A = generate_A(n, gamma=gamma)
+        f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n)])
+        x = np.array(create_list(0, 1, n))
+
+        print("n={}, h={}, h^2={}".format(n, h, h ** 2))
+
+        res = GradientDescent(A, f)
+        g_iters.append(res[1])
+        print('итераций={}, максимальная ошибка={}'.format(res[1], np.max(
+            np.abs(res[0] - u(x, alpha, betta)[:-1]))))
+    plt.plot(ns, g_iters, label='метод Градиентного спуска')
 
     legend = plt.legend(loc='upper center', shadow=True, fontsize='medium')
     legend.get_frame().set_facecolor('#00FFCC')
@@ -287,7 +352,12 @@ def compare_methods(alpha, betta, gamma, eps):
     plt.grid(True)
     plt.show()
 
-compare_methods(al, be, ga, eps_)
+#compare_methods(al, be, ga)
+A = generate_A(n_, gamma=ga)
+h = 1/n_
+f = np.array([func(i * h) * np.power(h, 2) for i in range(1, n_)])
+print(GradientDescent(A, f))
+
 
 
 def explore_e_by_n(alpha=2, betta=1, gamma=1, ns=None, epss=None):
